@@ -1,0 +1,59 @@
+name: chat_app
+description: تطبيق شات شخصي - Firebase + Agora
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Firebase
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  cloud_firestore: ^5.4.4
+  firebase_storage: ^12.3.4
+  firebase_messaging: ^15.1.3
+  firebase_database: ^11.1.0        # للـ Presence و Typing indicator
+
+  # Local notifications (لعرض الإشعارات جوه التطبيق)
+  flutter_local_notifications: ^18.0.1
+
+  # الوسائط
+  image_picker: ^1.1.2
+  record: ^5.1.2
+  just_audio: ^0.9.40
+  path_provider: ^2.1.4
+  geolocator: ^13.0.1
+  geocoding: ^3.0.0
+  google_maps_flutter: ^2.6.0       # لمشاركة الموقع
+
+  # المكالمات
+  agora_rtc_engine: ^6.3.2
+  permission_handler: ^11.3.1
+  flutter_callkit_incoming: any  # شاشة اتصال Native
+
+  # جهات الاتصال
+  flutter_contacts: ^1.1.9           # لقراءة جهات الاتصال
+
+  # عام
+  cached_network_image: ^3.4.1
+  intl: any
+  uuid: ^4.5.1
+  shared_preferences: ^2.3.2
+  go_router: ^14.2.0                 # للتنقل بين شاشات التطبيق
+  google_fonts: ^6.2.1               # لخط IBM Plex Sans Arabic
+  flutter_riverpod: ^2.5.1           # إدارة الحالة المتقدمة
+  provider: ^6.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
