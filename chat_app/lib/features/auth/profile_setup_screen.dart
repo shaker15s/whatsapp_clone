@@ -121,14 +121,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                             border: Border.all(color: AppColors.primary, width: 2),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primary.withOpacity(0.15),
+                                color: AppColors.primary.withValues(alpha: 0.15),
                                 blurRadius: 16,
                               ),
                             ],
                           ),
                           child: CircleAvatar(
                             radius: 62,
-                            backgroundColor: Colors.black.withOpacity(0.3),
+                            backgroundColor: Colors.black.withValues(alpha: 0.3),
                             backgroundImage: _imageFile != null ? FileImage(_imageFile!) : null,
                             child: _imageFile == null
                                 ? const Icon(Icons.add_a_photo_outlined, size: 40, color: AppColors.primary)
@@ -161,7 +161,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         controller: _nameController,
                         decoration: InputDecoration(
                           hintText: 'اكتب اسمك هنا...',
-                          fillColor: Colors.black.withOpacity(0.2),
+                          fillColor: Colors.black.withValues(alpha: 0.2),
                           filled: true,
                           prefixIcon: const Icon(Icons.person_outline, color: AppColors.primary),
                           border: OutlineInputBorder(

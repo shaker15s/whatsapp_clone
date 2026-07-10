@@ -30,55 +30,27 @@ class _GroupCreateScreenState extends State<GroupCreateScreen> {
 
     try {
       final participants = [myUid, ..._selectedUids];
-      try {
-        final docRef = FirebaseFirestore.instance.collection('chats').doc();
-        await docRef.set({
-          'participants': participants,
-          'lastMessage': 'تم إنشاء المجموعة',
-          'lastMessageTime': FieldValue.serverTimestamp(),
-          'lastMessageType': 'text',
-          'type': 'group',
-          'groupName': name,
-          'groupPhotoUrl': null,
-          'unreadCount': {for (var uid in participants) uid: 0},
-          'archivedBy': [],
-          'pinnedBy': [],
-          'admins': [myUid],
-        });
-      } catch (_) {
-        // Offline simulation of group creation
-      }
+      final chatService = ChatService();
+      final groupId = await chatService.createGroup(myUid, name, _selectedUids);
 
       if (mounted) {
         context.go('/home');
       }
     } catch (e) {
-      setState(() => _loading = false);
-    }
-  }
-
-  Stream<QuerySnapshot> _getUsersStream() {
-    try {
-      return FirebaseFirestore.instance.collection('users').limit(15).snapshots();
-    } catch (_) {
-      final mockDocs = [
-        MockQueryDocumentSnapshot('other_user_1', {
-          'name': 'سارة أحمد',
-          'about': 'الحياة جميلة 💚',
-          'uid': 'other_user_1',
-        }),
-        MockQueryDocumentSnapshot('other_user_2', {
-          'name': 'كريم علي',
-          'about': 'مشغول دائماً ☕',
-          'uid': 'other_user_2',
-        }),
-      ];
-      return Stream.value(MockQuerySnapshot(mockDocs));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في إنشاء المجموعة: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final myUid = AuthService().currentUser?.uid ?? '';
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -131,25 +103,25 @@ class _GroupCreateScreenState extends State<GroupCreateScreen> {
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary),
               ),
               const SizedBox(height: 12),
-              // قائمة افتراضية بالمسجلين للتبسيط في هذا المثال
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: _getUsersStream(),
+                  stream: FirebaseFirestore.instance.collection('users').limit(15).snapshots(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                     final docs = snapshot.data!.docs;
-                    final myUid = AuthService().currentUser?.uid ?? '';
 
                     return ListView.builder(
                       itemCount: docs.length,
                       itemBuilder: (context, index) {
                         final u = docs[index];
                         if (u.id == myUid) return const SizedBox.shrink();
+                        final data = u.data() as Map<String, dynamic>;
+                        final name = data['name'] ?? 'مستخدم';
                         final isSelected = _selectedUids.contains(u.id);
 
                         return ListTile(
                           leading: const CircleAvatar(child: Icon(Icons.person)),
-                          title: Text(u.id),
+                          title: Text(name),
                           trailing: Icon(
                             isSelected ? Icons.check_circle : Icons.radio_button_off,
                             color: isSelected ? AppColors.primary : AppColors.outline,

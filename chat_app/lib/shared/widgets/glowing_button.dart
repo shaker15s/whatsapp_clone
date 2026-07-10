@@ -22,7 +22,7 @@ class GlowingButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.3),
+            color: AppColors.primary.withValues(alpha: 0.3),
             blurRadius: 16,
             spreadRadius: 1,
             offset: const Offset(0, 4),

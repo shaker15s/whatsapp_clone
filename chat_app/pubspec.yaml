@@ -46,7 +46,7 @@ dependencies:
   uuid: ^4.5.1
   shared_preferences: ^2.3.2
   go_router: ^14.2.0                 # للتنقل بين شاشات التطبيق
-  google_fonts: ^6.2.1               # لخط IBM Plex Sans Arabic
+  google_fonts: ^6.3.0 # لخط IBM Plex Sans Arabic               # لخط IBM Plex Sans Arabic
   flutter_riverpod: ^2.5.1           # إدارة الحالة المتقدمة
   provider: ^6.1.2
 

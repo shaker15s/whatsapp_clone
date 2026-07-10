@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/glass_container.dart';
 import '../../shared/widgets/glowing_button.dart';
@@ -33,7 +34,7 @@ class GroupInviteScreen extends StatelessWidget {
               Column(
                 children: [
                   const SizedBox(height: 30),
-                  // رمز كود QR ومحاكاته
+                  // QR placeholder
                   GlassContainer(
                     width: 200,
                     height: 200,
@@ -44,7 +45,7 @@ class GroupInviteScreen extends StatelessWidget {
                       child: Container(
                         width: 150,
                         height: 150,
-                        color: Colors.white.withOpacity(0.08),
+                        color: Colors.white.withValues(alpha: 0.08),
                         child: const Icon(Icons.qr_code_2, size: 120, color: AppColors.primary),
                       ),
                     ),
@@ -57,12 +58,12 @@ class GroupInviteScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     'يمكن لأي شخص لديه هذا الرابط الانضمام إلى هذه المجموعة مباشرة.',
-                    style: TextStyle(color: AppColors.outline.withOpacity(0.8), fontSize: 13),
+                    style: TextStyle(color: AppColors.outline.withValues(alpha: 0.8), fontSize: 13),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
-                  
-                  // عرض الرابط في حاوية بلورية
+
+                  // Link display
                   GlassContainer(
                     opacity: 0.03,
                     blur: 10,
@@ -84,17 +85,32 @@ class GroupInviteScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              
+
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   GlowingButton(
                     text: 'نسخ الرابط',
-                    onPressed: () {
-                      // نسخ الرابط إلى الحافظة
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('تم نسخ رابط الدعوة إلى الحافظة')),
-                      );
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: inviteLink));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('تم نسخ رابط الدعوة إلى الحافظة ✅')),
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // Share option
+                  GlowingButton(
+                    text: 'مشاركة الرابط',
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: inviteLink));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('تم نسخ الرابط — يمكنك مشاركته الآن')),
+                        );
+                      }
                     },
                   ),
                   const SizedBox(height: 30),

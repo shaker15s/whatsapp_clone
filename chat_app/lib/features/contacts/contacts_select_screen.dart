@@ -6,47 +6,38 @@ import '../../shared/widgets/glass_container.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/chat_service.dart';
 
-class ContactsSelectScreen extends StatelessWidget {
+class ContactsSelectScreen extends StatefulWidget {
   const ContactsSelectScreen({super.key});
 
+  @override
+  State<ContactsSelectScreen> createState() => _ContactsSelectScreenState();
+}
+
+class _ContactsSelectScreenState extends State<ContactsSelectScreen> {
   @override
   Widget build(BuildContext context) {
     final myUid = AuthService().currentUser?.uid ?? '';
     final chatService = ChatService();
-
-    Stream<QuerySnapshot> getUsersStream() {
-      try {
-        return FirebaseFirestore.instance.collection('users').snapshots();
-      } catch (_) {
-        final mockDocs = [
-          MockQueryDocumentSnapshot('other_user_1', {
-            'name': 'سارة أحمد',
-            'about': 'الحياة جميلة 💚',
-            'uid': 'other_user_1',
-          }),
-          MockQueryDocumentSnapshot('other_user_2', {
-            'name': 'كريم علي',
-            'about': 'مشغول دائماً ☕',
-            'uid': 'other_user_2',
-          }),
-        ];
-        return Stream.value(MockQuerySnapshot(mockDocs));
-      }
-    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('جهات الاتصال', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(
+          (GoRouterState.of(context).extra as Map<String, dynamic>?)
+              ?.containsKey('forwardMessageId') == true
+              ? 'إعادة توجيه إلى'
+              : 'جهات الاتصال',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => context.pop(),
         ),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: getUsersStream(),
+        stream: FirebaseFirestore.instance.collection('users').snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -77,15 +68,36 @@ class ContactsSelectScreen extends StatelessWidget {
                     title: Text(name),
                     subtitle: Text(about, style: const TextStyle(fontSize: 12, color: AppColors.outline), maxLines: 1),
                     onTap: () async {
-                      final chatId = await chatService.getOrCreateChat(myUid, u.id);
-                      if (context.mounted) {
-                        context.pushReplacement(
-                          '/chat/$chatId',
-                          extra: {
-                            'myUid': myUid,
-                            'otherUid': u.id,
-                          },
+                      final extraMap = GoRouterState.of(context).extra as Map<String, dynamic>?;
+                      final isForward = extraMap != null && extraMap.containsKey('forwardMessageId');
+
+                      if (isForward) {
+                        final targetChatId = await chatService.getOrCreateChat(myUid, u.id);
+                        final forwardMessageId = extraMap['forwardMessageId'] as String;
+                        final forwardFromChatId = extraMap['forwardFromChatId'] as String;
+                        await chatService.forwardMessage(
+                          forwardFromChatId,
+                          forwardMessageId,
+                          targetChatId,
+                          myUid,
                         );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('تم إعادة توجيه الرسالة')),
+                          );
+                          context.pop();
+                        }
+                      } else {
+                        final chatId = await chatService.getOrCreateChat(myUid, u.id);
+                        if (mounted) {
+                          context.pushReplacement(
+                            '/chat/$chatId',
+                            extra: {
+                              'myUid': myUid,
+                              'otherUid': u.id,
+                            },
+                          );
+                        }
                       }
                     },
                   ),

@@ -159,8 +159,8 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                               style: const TextStyle(color: Colors.white),
                               decoration: InputDecoration(
                                 hintText: '+20 123 456 7890',
-                                hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-                                fillColor: Colors.black.withOpacity(0.2),
+                                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+                                fillColor: Colors.black.withValues(alpha: 0.2),
                                 filled: true,
                                 prefixIcon: const Icon(Icons.phone_iphone_outlined, color: AppColors.primary),
                                 border: OutlineInputBorder(

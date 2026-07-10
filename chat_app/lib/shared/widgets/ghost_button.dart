@@ -27,7 +27,7 @@ class GhostButton extends StatelessWidget {
         opacity: 0.02,
         blur: 10,
         border: Border.all(
-          color: AppColors.primary.withOpacity(0.3),
+          color: AppColors.primary.withValues(alpha: 0.3),
           width: 1.0,
         ),
         child: InkWell(

@@ -1,195 +1,45 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'auth_service.dart';
 
-// Mock implementations of Firestore objects to support running without Firebase config
-class MockDocumentSnapshot implements DocumentSnapshot {
-  @override
-  final String id;
-  final Map<String, dynamic>? _data;
-
-  MockDocumentSnapshot(this.id, this._data);
-
-  @override
-  Map<String, dynamic>? data() => _data;
-
-  @override
-  dynamic get(Object field) => _data?[field];
-
-  @override
-  dynamic operator [](Object field) => _data?[field];
-
-  @override
-  bool get exists => _data != null;
-
-  @override
-  SnapshotMetadata get metadata => throw UnimplementedError();
-
-  @override
-  DocumentReference get reference => throw UnimplementedError();
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class MockQueryDocumentSnapshot extends MockDocumentSnapshot implements QueryDocumentSnapshot {
-  MockQueryDocumentSnapshot(super.id, super.data);
-
-  @override
-  Map<String, dynamic> data() => super.data() ?? {};
-}
-
-class MockQuerySnapshot implements QuerySnapshot {
-  @override
-  final List<QueryDocumentSnapshot> docs;
-
-  MockQuerySnapshot(this.docs);
-
-  @override
-  List<DocumentChange> get docChanges => [];
-
-  @override
-  SnapshotMetadata get metadata => throw UnimplementedError();
-
-  @override
-  int get size => docs.length;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
+/// خدمة المحادثات - تدعم Firebase الحقيقي مع معالجة خطأ سليمة
 class ChatService {
-  FirebaseFirestore? get _db {
+  /// التحقق من جاهزية Firebase
+  bool get _isFirebaseReady {
     try {
-      return FirebaseFirestore.instance;
+      return Firebase.apps.isNotEmpty;
     } catch (_) {
-      return null;
+      return false;
     }
   }
 
-  FirebaseDatabase? get _rtdb {
-    try {
-      return FirebaseDatabase.instance;
-    } catch (_) {
-      return null;
+  /// إرجاع مثيل Firestore مع التحقق من الجاهزية
+  FirebaseFirestore get _db {
+    if (!_isFirebaseReady) {
+      throw StateError('Firebase غير مهيأ. تأكد من تشغيل flutterfire configure.');
     }
+    return FirebaseFirestore.instance;
   }
 
-  // Local/Offline state representation
-  static final List<Map<String, dynamic>> _mockChats = [
-    {
-      'id': 'chat_1',
-      'participants': ['mock_uid_123', 'other_user_1'],
-      'lastMessage': 'أهلاً بك في Lumina Emerald! 👋',
-      'lastMessageTime': Timestamp.fromDate(DateTime.now().subtract(const Duration(minutes: 5))),
-      'lastMessageType': 'text',
-      'unreadCount': {'mock_uid_123': 1, 'other_user_1': 0},
-      'archivedBy': [],
-      'pinnedBy': [],
-      'type': 'direct',
-    },
-    {
-      'id': 'chat_2',
-      'participants': ['mock_uid_123', 'other_user_2'],
-      'lastMessage': '📷 صورة',
-      'lastMessageTime': Timestamp.fromDate(DateTime.now().subtract(const Duration(hours: 2))),
-      'lastMessageType': 'image',
-      'unreadCount': {'mock_uid_123': 0, 'other_user_2': 0},
-      'archivedBy': [],
-      'pinnedBy': [],
-      'type': 'direct',
+  /// إرجاع مثيل Realtime Database مع التحقق من الجاهزية
+  FirebaseDatabase get _rtdb {
+    if (!_isFirebaseReady) {
+      throw StateError('Firebase غير مهيأ. تأكد من تشغيل flutterfire configure.');
     }
-  ];
+    return FirebaseDatabase.instance;
+  }
 
-  static final Map<String, List<Map<String, dynamic>>> _mockMessages = {
-    'chat_1': [
-      {
-        'id': 'msg_1_1',
-        'senderId': 'other_user_1',
-        'type': 'text',
-        'content': 'مرحباً، كيف حالك؟ هذا هو تصميم Lumina Emerald الأنيق.',
-        'timestamp': Timestamp.fromDate(DateTime.now().subtract(const Duration(minutes: 10))),
-        'status': 'read',
-        'reactions': {},
-        'isStarredBy': [],
-        'isDeleted': false,
-      },
-      {
-        'id': 'msg_1_2',
-        'senderId': 'other_user_1',
-        'type': 'text',
-        'content': 'أهلاً بك في Lumina Emerald! 👋',
-        'timestamp': Timestamp.fromDate(DateTime.now().subtract(const Duration(minutes: 5))),
-        'status': 'delivered',
-        'reactions': {},
-        'isStarredBy': [],
-        'isDeleted': false,
-      }
-    ],
-    'chat_2': [
-      {
-        'id': 'msg_2_1',
-        'senderId': 'mock_uid_123',
-        'type': 'text',
-        'content': 'مرحباً، أرسلت لك هذه الصورة الرائعة.',
-        'timestamp': Timestamp.fromDate(DateTime.now().subtract(const Duration(hours: 2, minutes: 5))),
-        'status': 'read',
-        'reactions': {},
-        'isStarredBy': [],
-        'isDeleted': false,
-      },
-      {
-        'id': 'msg_2_2',
-        'senderId': 'mock_uid_123',
-        'type': 'image',
-        'content': 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500',
-        'timestamp': Timestamp.fromDate(DateTime.now().subtract(const Duration(hours: 2))),
-        'status': 'read',
-        'reactions': {},
-        'isStarredBy': [],
-        'isDeleted': false,
-      }
-    ]
-  };
-
-  // StreamControllers to trigger UI updates for mock streams
-  static final StreamController<List<Map<String, dynamic>>> _chatsController = StreamController<List<Map<String, dynamic>>>.broadcast();
-  static final Map<String, StreamController<List<Map<String, dynamic>>>> _messageControllers = {};
-  static final Map<String, bool> _typingStates = {};
-  static final Map<String, StreamController<bool>> _typingControllers = {};
-
-  /// الحصول على شات أو إنشائه
+  // ─── Get or Create Chat ──────────────────────────────────────────────────
+  /// الحصول على شات أو إنشاؤه (محادثة مباشرة)
   Future<String> getOrCreateChat(String myUid, String otherUid) async {
-    if (_db == null) {
-      final ids = [myUid, otherUid]..sort();
-      final chatId = '${ids[0]}_${ids[1]}';
-      
-      final exists = _mockChats.any((c) => c['id'] == chatId);
-      if (!exists) {
-        final newChat = {
-          'id': chatId,
-          'participants': [myUid, otherUid],
-          'lastMessage': '',
-          'lastMessageTime': Timestamp.now(),
-          'lastMessageType': 'text',
-          'unreadCount': {myUid: 0, otherUid: 0},
-          'archivedBy': [],
-          'pinnedBy': [],
-          'type': 'direct',
-        };
-        _mockChats.add(newChat);
-        _mockMessages[chatId] = [];
-        _chatsController.add(List.from(_mockChats));
-      }
-      return chatId;
-    }
-
-    // بناء معرّف فريد دائمًا بغض النظر عن البادئ
     final ids = [myUid, otherUid]..sort();
     final chatId = '${ids[0]}_${ids[1]}';
-    
-    final chatRef = _db!.collection('chats').doc(chatId);
+
+    final chatRef = _db.collection('chats').doc(chatId);
     final doc = await chatRef.get();
 
     if (!doc.exists) {
@@ -201,45 +51,25 @@ class ChatService {
         'unreadCount': {myUid: 0, otherUid: 0},
         'archivedBy': [],
         'pinnedBy': [],
+        'type': 'direct',
       });
     }
     return chatId;
   }
 
-  /// التسمع للشاتات الخاصة بالمستخدم
+  // ─── Watch My Chats ─────────────────────────────────────────────────────
+  /// الاستماع للشاتات الخاصة بالمستخدم
   Stream<QuerySnapshot> watchMyChats(String uid) {
-    if (_db == null) {
-      // Return local stream converted to QuerySnapshot
-      return _chatsController.stream.map((chatsList) {
-        final userChats = chatsList.where((c) => (c['participants'] as List).contains(uid)).toList();
-        final docs = userChats.map((c) => MockQueryDocumentSnapshot(c['id'], c)).toList();
-        return MockQuerySnapshot(docs);
-      }).asBroadcastStream(onListen: (sub) {
-        _chatsController.add(List.from(_mockChats));
-      });
-    }
-    return _db!
+    return _db
         .collection('chats')
         .where('participants', arrayContains: uid)
         .snapshots();
   }
 
-  /// التسمع للرسائل
+  // ─── Watch Messages ─────────────────────────────────────────────────────
+  /// الاستماع للرسائل في شات معين
   Stream<QuerySnapshot> watchMessages(String chatId) {
-    if (_db == null) {
-      if (!_messageControllers.containsKey(chatId)) {
-        _messageControllers[chatId] = StreamController<List<Map<String, dynamic>>>.broadcast();
-      }
-      return _messageControllers[chatId]!.stream.map((messagesList) {
-        // Reverse to match descending timeline
-        final reversed = messagesList.reversed.toList();
-        final docs = reversed.map((m) => MockQueryDocumentSnapshot(m['id'], m)).toList();
-        return MockQuerySnapshot(docs);
-      }).asBroadcastStream(onListen: (sub) {
-        _messageControllers[chatId]!.add(List.from(_mockMessages[chatId] ?? []));
-      });
-    }
-    return _db!
+    return _db
         .collection('chats')
         .doc(chatId)
         .collection('messages')
@@ -247,6 +77,7 @@ class ChatService {
         .snapshots();
   }
 
+  // ─── Send Message ───────────────────────────────────────────────────────
   /// إرسال رسالة مع دعم الرد والميديا
   Future<void> sendMessage({
     required String chatId,
@@ -271,66 +102,14 @@ class ChatService {
         previewText = content;
     }
 
-    if (_db == null) {
-      final msgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
-      final newMsg = {
-        'id': msgId,
-        'senderId': senderId,
-        'type': type,
-        'content': content,
-        'timestamp': Timestamp.now(),
-        'status': 'sent',
-        'reactions': {},
-        'isStarredBy': [],
-        'isDeleted': false,
-        if (replyTo != null) 'replyTo': replyTo,
-        if (durationSeconds != null) 'durationSeconds': durationSeconds,
-      };
-
-      if (!_mockMessages.containsKey(chatId)) {
-        _mockMessages[chatId] = [];
-      }
-      _mockMessages[chatId]!.add(newMsg);
-
-      // Update Chat List info
-      final chatIndex = _mockChats.indexWhere((c) => c['id'] == chatId);
-      if (chatIndex != -1) {
-        final chat = _mockChats[chatIndex];
-        chat['lastMessage'] = previewText;
-        chat['lastMessageTime'] = Timestamp.now();
-        chat['lastMessageType'] = type;
-        
-        final participants = List<String>.from(chat['participants'] ?? []);
-        final currentUnread = Map<String, dynamic>.from(chat['unreadCount'] ?? {});
-        for (final p in participants) {
-          if (p != senderId) {
-            currentUnread[p] = (currentUnread[p] ?? 0) + 1;
-          }
-        }
-        chat['unreadCount'] = currentUnread;
-        _mockChats[chatIndex] = chat;
-      }
-
-      // Notify Listeners
-      _chatsController.add(List.from(_mockChats));
-      if (_messageControllers.containsKey(chatId)) {
-        _messageControllers[chatId]!.add(List.from(_mockMessages[chatId]!));
-      }
-
-      // Trigger automatic AI Response if sending message to AI Assistant
-      if (chatId.contains('other_user_1') || chatId.contains('other_user_2')) {
-        _simulateTypingAndResponse(chatId, senderId);
-      }
-      return;
-    }
-
-    final chatRef = _db!.collection('chats').doc(chatId);
+    final chatRef = _db.collection('chats').doc(chatId);
     final messageRef = chatRef.collection('messages').doc();
 
-    final messageData = {
-      'id': messageRef.id,
-      'senderId': senderId,
-      'type': type,
+  final messageData = {
+    'id': messageRef.id,
+    'chatId': chatId,
+    'senderId': senderId,
+    'type': type,
       'content': content,
       'timestamp': FieldValue.serverTimestamp(),
       'status': 'sent',
@@ -341,95 +120,39 @@ class ChatService {
       if (durationSeconds != null) 'durationSeconds': durationSeconds,
     };
 
-    // حفظ الرسالة
-    await messageRef.set(messageData);
+    // كتابة الرسالة وتحديث معلومات الشات في batch واحد لضمان الاتساق
+    final batch = _db.batch();
 
-    final doc = await chatRef.get();
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    final participants = List<String>.from(data['participants'] ?? []);
-    final currentUnread = Map<String, dynamic>.from(data['unreadCount'] ?? {});
+    // 1. إضافة الرسالة
+    batch.set(messageRef, messageData);
 
+    // 2. تحديث آخر رسالة + زيادة عدادات القراءة باستخدام FieldValue.increment
+    final chatDoc = await chatRef.get();
+    final participants = List<String>.from(chatDoc.data()?['participants'] ?? []);
+    final unreadUpdates = <String, dynamic>{};
     for (final p in participants) {
       if (p != senderId) {
-        currentUnread[p] = (currentUnread[p] ?? 0) + 1;
+        unreadUpdates['unreadCount.$p'] = FieldValue.increment(1);
       }
     }
 
-    await chatRef.update({
+    batch.update(chatRef, {
       'lastMessage': previewText,
       'lastMessageTime': FieldValue.serverTimestamp(),
       'lastMessageType': type,
-      'unreadCount': currentUnread,
+      ...unreadUpdates,
     });
+
+    await batch.commit();
   }
 
-  // Local AI/Bot response simulation for offline testing
-  void _simulateTypingAndResponse(String chatId, String senderId) {
-    final otherUid = chatId.replaceFirst(senderId, '').replaceFirst('_', '');
-    setTyping(chatId, otherUid, true);
-
-    Future.delayed(const Duration(seconds: 2), () {
-      setTyping(chatId, otherUid, false);
-      final msgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
-      final botMsg = {
-        'id': msgId,
-        'senderId': otherUid,
-        'type': 'text',
-        'content': 'مرحباً! أنا هنا متصل حالياً للرد عليك. تصميم الزمردة جميل، أليس كذلك؟ 💚',
-        'timestamp': Timestamp.now(),
-        'status': 'read',
-        'reactions': {},
-        'isStarredBy': [],
-        'isDeleted': false,
-      };
-
-      _mockMessages[chatId]!.add(botMsg);
-      final chatIndex = _mockChats.indexWhere((c) => c['id'] == chatId);
-      if (chatIndex != -1) {
-        final chat = _mockChats[chatIndex];
-        chat['lastMessage'] = botMsg['content'];
-        chat['lastMessageTime'] = Timestamp.now();
-        chat['lastMessageType'] = 'text';
-        _mockChats[chatIndex] = chat;
-      }
-
-      _chatsController.add(List.from(_mockChats));
-      if (_messageControllers.containsKey(chatId)) {
-        _messageControllers[chatId]!.add(List.from(_mockMessages[chatId]!));
-      }
-    });
-  }
-
+  // ─── Mark Chat as Read ──────────────────────────────────────────────────
   /// تحديث حالة القراءة للمحادثة
   Future<void> markChatAsRead(String chatId, String myUid) async {
-    if (_db == null) {
-      final chatIndex = _mockChats.indexWhere((c) => c['id'] == chatId);
-      if (chatIndex != -1) {
-        final chat = _mockChats[chatIndex];
-        final unreadCount = Map<String, dynamic>.from(chat['unreadCount'] ?? {});
-        unreadCount[myUid] = 0;
-        chat['unreadCount'] = unreadCount;
-        _mockChats[chatIndex] = chat;
-        _chatsController.add(List.from(_mockChats));
-      }
+    final chatRef = _db.collection('chats').doc(chatId);
 
-      if (_mockMessages.containsKey(chatId)) {
-        for (var msg in _mockMessages[chatId]!) {
-          if (msg['senderId'] != myUid && msg['status'] != 'read') {
-            msg['status'] = 'read';
-          }
-        }
-        if (_messageControllers.containsKey(chatId)) {
-          _messageControllers[chatId]!.add(List.from(_mockMessages[chatId]!));
-        }
-      }
-      return;
-    }
-
-    final chatRef = _db!.collection('chats').doc(chatId);
-    
-    // تصفير العداد للمستخدم الحالي
-    await _db!.runTransaction((transaction) async {
+    // إعادة تعيين عداد القراءة للمستخدم الحالي
+    await _db.runTransaction((transaction) async {
       final snapshot = await transaction.get(chatRef);
       if (!snapshot.exists) return;
       final data = snapshot.data() as Map<String, dynamic>;
@@ -438,82 +161,47 @@ class ChatService {
       transaction.update(chatRef, {'unreadCount': unreadCount});
     });
 
-    // تحديث كل الرسائل غير المقروءة من الطرف الآخر لتصبح read
+    // تعليم جميع الرسائل غير المقروءة بأنها مقروءة
     final unreadMessages = await chatRef
         .collection('messages')
         .where('senderId', isNotEqualTo: myUid)
         .where('status', isNotEqualTo: 'read')
         .get();
 
-    final batch = _db!.batch();
-    for (final doc in unreadMessages.docs) {
-      batch.update(doc.reference, {'status': 'read'});
+    if (unreadMessages.docs.isNotEmpty) {
+      final batch = _db.batch();
+      for (final doc in unreadMessages.docs) {
+        batch.update(doc.reference, {'status': 'read'});
+      }
+      await batch.commit();
     }
-    await batch.commit();
   }
 
+  // ─── Toggle Reaction ────────────────────────────────────────────────────
   /// إرسال تفاعل (Reaction)
-  Future<void> toggleReaction(String chatId, String messageId, String myUid, String emoji) async {
-    if (_db == null) {
-      if (_mockMessages.containsKey(chatId)) {
-        final msgIndex = _mockMessages[chatId]!.indexWhere((m) => m['id'] == messageId);
-        if (msgIndex != -1) {
-          final msg = _mockMessages[chatId]![msgIndex];
-          final reactions = Map<String, dynamic>.from(msg['reactions'] ?? {});
-          if (reactions[myUid] == emoji) {
-            reactions.remove(myUid);
-          } else {
-            reactions[myUid] = emoji;
-          }
-          msg['reactions'] = reactions;
-          _mockMessages[chatId]![msgIndex] = msg;
-          
-          if (_messageControllers.containsKey(chatId)) {
-            _messageControllers[chatId]!.add(List.from(_mockMessages[chatId]!));
-          }
-        }
-      }
-      return;
-    }
+  Future<void> toggleReaction(
+      String chatId, String messageId, String myUid, String emoji) async {
+    final msgRef = _db.collection('chats').doc(chatId).collection('messages').doc(messageId);
 
-    final msgRef = _db!.collection('chats').doc(chatId).collection('messages').doc(messageId);
-    
-    await _db!.runTransaction((transaction) async {
+    await _db.runTransaction((transaction) async {
       final snapshot = await transaction.get(msgRef);
       if (!snapshot.exists) return;
       final data = snapshot.data() as Map<String, dynamic>;
       final reactions = Map<String, dynamic>.from(data['reactions'] ?? {});
-      
+
       if (reactions[myUid] == emoji) {
         reactions.remove(myUid); // إزالة التفاعل
       } else {
         reactions[myUid] = emoji;
       }
-      
       transaction.update(msgRef, {'reactions': reactions});
     });
   }
 
+  // ─── Toggle Archive ─────────────────────────────────────────────────────
   /// أرشفة الشات أو إلغاء الأرشفة
   Future<void> toggleArchiveChat(String chatId, String myUid, bool archive) async {
-    if (_db == null) {
-      final chatIndex = _mockChats.indexWhere((c) => c['id'] == chatId);
-      if (chatIndex != -1) {
-        final chat = _mockChats[chatIndex];
-        final archivedBy = List<String>.from(chat['archivedBy'] ?? []);
-        if (archive) {
-          if (!archivedBy.contains(myUid)) archivedBy.add(myUid);
-        } else {
-          archivedBy.remove(myUid);
-        }
-        chat['archivedBy'] = archivedBy;
-        _mockChats[chatIndex] = chat;
-        _chatsController.add(List.from(_mockChats));
-      }
-      return;
-    }
-
-    final chatRef = _db!.collection('chats').doc(chatId);
+    final chatRef = _db.collection('chats').doc(chatId);
     if (archive) {
       await chatRef.update({
         'archivedBy': FieldValue.arrayUnion([myUid]),
@@ -525,31 +213,11 @@ class ChatService {
     }
   }
 
+  // ─── Toggle Star ────────────────────────────────────────────────────────
   /// وضع نجمة على رسالة
-  Future<void> toggleStarMessage(String chatId, String messageId, String myUid, bool star) async {
-    if (_db == null) {
-      if (_mockMessages.containsKey(chatId)) {
-        final msgIndex = _mockMessages[chatId]!.indexWhere((m) => m['id'] == messageId);
-        if (msgIndex != -1) {
-          final msg = _mockMessages[chatId]![msgIndex];
-          final isStarredBy = List<String>.from(msg['isStarredBy'] ?? []);
-          if (star) {
-            if (!isStarredBy.contains(myUid)) isStarredBy.add(myUid);
-          } else {
-            isStarredBy.remove(myUid);
-          }
-          msg['isStarredBy'] = isStarredBy;
-          _mockMessages[chatId]![msgIndex] = msg;
-
-          if (_messageControllers.containsKey(chatId)) {
-            _messageControllers[chatId]!.add(List.from(_mockMessages[chatId]!));
-          }
-        }
-      }
-      return;
-    }
-
-    final msgRef = _db!.collection('chats').doc(chatId).collection('messages').doc(messageId);
+  Future<void> toggleStarMessage(
+      String chatId, String messageId, String myUid, bool star) async {
+    final msgRef = _db.collection('chats').doc(chatId).collection('messages').doc(messageId);
     if (star) {
       await msgRef.update({
         'isStarredBy': FieldValue.arrayUnion([myUid]),
@@ -561,30 +229,281 @@ class ChatService {
     }
   }
 
+  // ─── Group CRUD ────────────────────────────────────────────────────────────
+  /// إنشاء مجموعة جديدة — يرجع groupId
+  Future<String> createGroup(
+    String creatorUid,
+    String groupName,
+    List<String> memberUids, {
+    String? groupPhotoUrl,
+  }) async {
+    final groupId = 'group_${DateTime.now().millisecondsSinceEpoch}_${creatorUid.hashCode}';
+    final allParticipants = [creatorUid, ...memberUids];
+
+    final chatRef = _db.collection('chats').doc(groupId);
+    await chatRef.set({
+      'participants': allParticipants,
+      'lastMessage': 'تم إنشاء المجموعة "$groupName"',
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'lastMessageType': 'text',
+      'unreadCount': {for (final p in allParticipants) p: (p == creatorUid ? 0 : 1)},
+      'archivedBy': [],
+      'pinnedBy': [],
+      'type': 'group',
+      'groupName': groupName,
+      'groupPhotoUrl': groupPhotoUrl ?? '',
+    });
+
+    // رسالة نظام
+    await chatRef.collection('messages').doc().set({
+      'id': 'sys_${DateTime.now().millisecondsSinceEpoch}',
+      'senderId': creatorUid,
+      'type': 'system',
+      'content': 'أنشأت المجموعة "$groupName"',
+      'timestamp': Timestamp.now(),
+      'status': 'read',
+      'reactions': {},
+      'isStarredBy': [],
+      'isDeleted': false,
+    });
+
+    return groupId;
+  }
+
+  /// إضافة عضو لمجموعة
+  Future<void> addGroupMember(String chatId, String memberUid) async {
+    final chatRef = _db.collection('chats').doc(chatId);
+    await _db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(chatRef);
+      if (!snapshot.exists) return;
+      final data = snapshot.data() as Map<String, dynamic>;
+      final participants = List<String>.from(data['participants'] ?? []);
+      if (!participants.contains(memberUid)) {
+        participants.add(memberUid);
+        transaction.update(chatRef, {
+          'participants': participants,
+          'unreadCount.$memberUid': 1,
+        });
+        transaction.set(chatRef.collection('messages').doc(), {
+          'id': 'sys_${DateTime.now().millisecondsSinceEpoch}',
+          'senderId': memberUid,
+          'type': 'system',
+          'content': 'انضم للمجموعة',
+          'timestamp': FieldValue.serverTimestamp(),
+          'status': 'read',
+          'reactions': {},
+          'isStarredBy': [],
+          'isDeleted': false,
+        });
+      }
+    });
+  }
+
+  /// حذف عضو من مجموعة
+  Future<void> removeGroupMember(String chatId, String memberUid) async {
+    final chatRef = _db.collection('chats').doc(chatId);
+    await _db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(chatRef);
+      if (!snapshot.exists) return;
+      final data = snapshot.data() as Map<String, dynamic>;
+      final participants = List<String>.from(data['participants'] ?? []);
+      participants.remove(memberUid);
+      transaction.update(chatRef, {'participants': participants});
+    });
+  }
+
+  /// تحديث اسم أو صورة المجموعة
+  Future<void> updateGroupInfo(String chatId, {String? groupName, String? groupPhotoUrl}) async {
+    final updates = <String, dynamic>{};
+    if (groupName != null) updates['groupName'] = groupName;
+    if (groupPhotoUrl != null) updates['groupPhotoUrl'] = groupPhotoUrl;
+    if (updates.isEmpty) return;
+
+    await _db.collection('chats').doc(chatId).update(updates);
+  }
+
+  /// الاستماع لقائمة أعضاء المجموعة
+  Stream<List<Map<String, dynamic>>> watchGroupMembers(String chatId) {
+    return _db
+        .collection('chats')
+        .doc(chatId)
+        .snapshots()
+        .map((snapshot) {
+      final data = snapshot.data();
+      if (data == null) return <Map<String, dynamic>>[];
+      final members = List<String>.from(data['participants'] ?? []);
+      return members.map((uid) => {'uid': uid}).toList();
+    });
+  }
+
+  // ─── Edit Message ──────────────────────────────────────────────────────────
+  /// تعديل رسالة نصية
+  Future<void> editMessage(String chatId, String messageId, String newContent) async {
+    await _db
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .doc(messageId)
+        .update({
+      'content': newContent,
+      'editedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // ─── Delete / Unsend Message ───────────────────────────────────────────────
+  /// حذف رسالة (لنفسي = حذف من القائمة فقط، للكل = إظهار "تم حذف الرسالة")
+  Future<void> deleteMessage(
+    String chatId,
+    String messageId,
+    String myUid, {
+    bool unsendForAll = false,
+  }) async {
+    final msgRef = _db
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .doc(messageId);
+
+    if (unsendForAll) {
+      await msgRef.update({
+        'content': 'تم حذف هذه الرسالة',
+        'isDeleted': true,
+      });
+    } else {
+      await msgRef.delete();
+    }
+  }
+
+  // ─── Forward Message ───────────────────────────────────────────────────────
+  /// إعادة توجيه رسالة لمحادثة أخرى
+  Future<void> forwardMessage(
+    String sourceChatId,
+    String messageId,
+    String targetChatId,
+    String myUid,
+  ) async {
+    final originalDoc = await _db
+        .collection('chats')
+        .doc(sourceChatId)
+        .collection('messages')
+        .doc(messageId)
+        .get();
+    if (!originalDoc.exists) return;
+
+    final data = originalDoc.data() as Map<String, dynamic>;
+
+    final targetMsgRef = _db
+        .collection('chats')
+        .doc(targetChatId)
+        .collection('messages')
+        .doc();
+
+    String preview = (data['content'] ?? '');
+    if (data['type'] == 'image') preview = '📷 صورة';
+    if (data['type'] == 'audio') preview = '🎤 رسالة صوتية';
+    if (data['type'] == 'location') preview = '📍 موقع';
+    preview = '↩️ $preview';
+
+await targetMsgRef.set({
+  'id': targetMsgRef.id,
+  'chatId': targetChatId,
+  'senderId': myUid,
+  'type': data['type'] ?? 'text',
+  'content': data['content'] ?? '',
+  if (data['durationSeconds'] != null) 'durationSeconds': data['durationSeconds'],
+  'timestamp': FieldValue.serverTimestamp(),
+  'status': 'sent',
+  'reactions': {},
+  'isStarredBy': [],
+  'isDeleted': false,
+  'isForwarded': true,
+  'forwardedFrom': sourceChatId,
+});
+
+  await _db.collection('chats').doc(targetChatId).update({
+      'lastMessage': preview,
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'lastMessageType': data['type'] ?? 'text',
+    });
+  }
+
+  // ─── Search Messages ───────────────────────────────────────────────────────
+  /// بحث في رسائل محادثة معينة (فلترة على côté-client)
+  /// ملاحظة: لنتائج أفضل في الإنتاج استخدم Algolia أو Elasticsearch
+  Future<List<Map<String, dynamic>>> searchMessages(
+    String chatId,
+    String query,
+  ) async {
+    final normalizedQuery = query.toLowerCase().trim();
+    if (normalizedQuery.isEmpty) return [];
+
+    // نفحص حتى 100 رسالة من الأحدث ونفلتر عميلياً
+    final snapshot = await _db
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .limit(100)
+        .get();
+
+    return snapshot.docs
+        .where((doc) {
+          final data = doc.data();
+          return (data['content'] ?? '').toString().toLowerCase().contains(normalizedQuery);
+        })
+        .map((doc) {
+          final data = Map<String, dynamic>.from(doc.data());
+          data['id'] = doc.id;
+          return data;
+        })
+        .toList();
+  }
+
+  // ─── Paginated Messages ────────────────────────────────────────────────────
+  /// جلب رسائل بنظام الصفحات — يرجع QuerySnapshot لكل صفحة
+  Future<QuerySnapshot> getMessagesPaginated(
+    String chatId, {
+    int limit = 20,
+    DocumentSnapshot? startAfter,
+  }) async {
+    var query = _db
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .limit(limit);
+
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+
+    return query.get();
+  }
+
+  // ─── Typing ─────────────────────────────────────────────────────────────
   /// التحديث اللحظي لحالة الكتابة (Typing)
   void setTyping(String chatId, String myUid, bool isTyping) {
-    if (_rtdb == null) {
-      final key = '${chatId}_$myUid';
-      _typingStates[key] = isTyping;
-      if (_typingControllers.containsKey(key)) {
-        _typingControllers[key]!.add(isTyping);
-      }
-      return;
-    }
-    _rtdb!.ref('typing/$chatId/$myUid').set(isTyping);
+    _rtdb.ref('typing/$chatId/$myUid').set(isTyping);
   }
 
   /// مراقبة حالة الكتابة للطرف الآخر
-  Stream<dynamic> watchTyping(String chatId, String otherUid) {
-    if (_rtdb == null) {
-      final key = '${chatId}_$otherUid';
-      if (!_typingControllers.containsKey(key)) {
-        _typingControllers[key] = StreamController<bool>.broadcast();
-      }
-      return _typingControllers[key]!.stream.asBroadcastStream(onListen: (sub) {
-        _typingControllers[key]!.add(_typingStates[key] ?? false);
-      });
-    }
-    return _rtdb!.ref('typing/$chatId/$otherUid').onValue;
+  Stream<DatabaseEvent> watchTyping(String chatId, String otherUid) {
+    return _rtdb.ref('typing/$chatId/$otherUid').onValue;
+  }
+
+  // ─── Upload Image ─────────────────────────────────────────────────────
+  /// رفع صورة إلى Firebase Storage
+  Future<String> uploadImage(File file, String folder) async {
+    final myUid = AuthService().currentUser?.uid;
+    if (myUid == null) throw StateError('User not logged in');
+
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
+    final ref = FirebaseStorage.instance.ref().child('$folder/$myUid/$fileName');
+
+    final uploadTask = ref.putFile(file);
+    final snapshot = await uploadTask.whenComplete(() => {});
+    final downloadUrl = await snapshot.ref.getDownloadURL();
+
+    return downloadUrl;
   }
 }

@@ -49,7 +49,7 @@ class _ChatsTabState extends State<ChatsTab> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.forum_outlined, size: 64, color: AppColors.outline.withOpacity(0.5)),
+                Icon(Icons.forum_outlined, size: 64, color: AppColors.outline.withValues(alpha: 0.5)),
                 const SizedBox(height: 16),
                 const Text(
                   'لا توجد محادثات نشطة بعد',
@@ -58,7 +58,7 @@ class _ChatsTabState extends State<ChatsTab> {
                 const SizedBox(height: 8),
                 Text(
                   'اضغط على زر الإضافة لبدء شات جديد',
-                  style: TextStyle(fontSize: 13, color: AppColors.outline.withOpacity(0.8)),
+                  style: TextStyle(fontSize: 13, color: AppColors.outline.withValues(alpha: 0.8)),
                 ),
               ],
             ),

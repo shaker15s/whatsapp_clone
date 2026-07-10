@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/services/call_service.dart';
-import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
-import '../../shared/widgets/glass_container.dart';
 
 class IncomingCallOverlay extends StatelessWidget {
   final String callId;
   final String callerId;
   final String channelName;
   final bool isVideo;
+  final String token;
 
   const IncomingCallOverlay({
     super.key,
@@ -17,6 +16,7 @@ class IncomingCallOverlay extends StatelessWidget {
     required this.callerId,
     required this.channelName,
     required this.isVideo,
+    required this.token,
   });
 
   @override
@@ -24,7 +24,7 @@ class IncomingCallOverlay extends StatelessWidget {
     final callService = CallService();
 
     return Scaffold(
-      backgroundColor: AppColors.background.withOpacity(0.95),
+      backgroundColor: AppColors.background.withValues(alpha: 0.95),
       body: SafeArea(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -40,7 +40,7 @@ class IncomingCallOverlay extends StatelessWidget {
                     border: Border.all(color: AppColors.primary, width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(0.2),
+                        color: AppColors.primary.withValues(alpha: 0.2),
                         blurRadius: 20,
                       ),
                     ],
@@ -62,8 +62,8 @@ class IncomingCallOverlay extends StatelessWidget {
                 ),
               ],
             ),
-            
-            // أزرار القبول والرفض البلورية
+
+            // أزرار القبول والرفض
             Padding(
               padding: const EdgeInsets.only(bottom: 60.0),
               child: Row(
@@ -88,7 +88,9 @@ class IncomingCallOverlay extends StatelessWidget {
                       icon: const Icon(Icons.call, color: Colors.white),
                       iconSize: 28,
                       onPressed: () async {
-                        await callService.joinCall(callId, channelName, isVideo, AppConfig.agoraAppId);
+                        final myUid = callService.engine?.toString() ?? ''; // Get current user UID somehow
+                        // We need the appId and token to join
+                        // For now, we'll need to pass these from the calling screen
                         if (context.mounted) {
                           context.pushReplacement(
                             '/call/active',
@@ -96,6 +98,8 @@ class IncomingCallOverlay extends StatelessWidget {
                               'callId': callId,
                               'isVideo': isVideo,
                               'otherUid': callerId,
+                              'channelName': channelName,
+                              'token': token,
                             },
                           );
                         }

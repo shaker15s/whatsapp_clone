@@ -4,45 +4,25 @@ import 'package:intl/intl.dart' as intl;
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/glass_container.dart';
 import '../../core/services/auth_service.dart';
-import '../../core/services/chat_service.dart';
+import '../../core/services/call_service.dart';
 
 class CallsTab extends StatelessWidget {
   const CallsTab({super.key});
+
+  Stream<QuerySnapshot> _getCallStream(String myUid) {
+    try {
+      return CallService().getCallHistory(myUid);
+    } catch (_) {
+      return const Stream.empty();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final myUid = AuthService().currentUser?.uid ?? '';
 
-    Stream<QuerySnapshot> getCallStream() {
-      try {
-        return FirebaseFirestore.instance
-            .collection('calls')
-            .where('callerId', isEqualTo: myUid)
-            .snapshots();
-      } catch (_) {
-        // Return a mock stream of QuerySnapshot for demo mode!
-        final mockDocs = [
-          MockQueryDocumentSnapshot('call_mock_1', {
-            'callerId': myUid,
-            'calleeId': 'other_user_1',
-            'type': 'video',
-            'status': 'accepted',
-            'createdAt': Timestamp.now(),
-          }),
-          MockQueryDocumentSnapshot('call_mock_2', {
-            'callerId': 'other_user_2',
-            'calleeId': myUid,
-            'type': 'voice',
-            'status': 'declined',
-            'createdAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 1))),
-          }),
-        ];
-        return Stream.value(MockQuerySnapshot(mockDocs));
-      }
-    }
-
     return StreamBuilder<QuerySnapshot>(
-      stream: getCallStream(),
+      stream: _getCallStream(myUid),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: AppColors.primary));
@@ -53,7 +33,7 @@ class CallsTab extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.phone_missed_outlined, size: 64, color: AppColors.outline.withOpacity(0.5)),
+                Icon(Icons.phone_missed_outlined, size: 64, color: AppColors.outline.withValues(alpha: 0.5)),
                 const SizedBox(height: 16),
                 const Text(
                   'لا توجد مكالمات بعد',

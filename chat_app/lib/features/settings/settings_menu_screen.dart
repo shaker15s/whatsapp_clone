@@ -8,6 +8,28 @@ import '../../shared/widgets/glass_container.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/chat_service.dart';
 
+/// Simple mock user profile data holder
+class _MockUserProfile {
+  final String id;
+  final Map<String, dynamic> dataMap;
+
+  _MockUserProfile(this.id, this.dataMap);
+
+  Map<String, dynamic>? data() => dataMap;
+  bool get exists => true;
+}
+
+/// Mock DocumentSnapshot for offline mode
+class _MockDocumentSnapshot {
+  final _MockUserProfile _profile;
+
+  _MockDocumentSnapshot(this._profile);
+
+  Map<String, dynamic>? data() => _profile.data();
+  bool get exists => _profile.exists;
+  String get id => _profile.id;
+}
+
 class SettingsMenuScreen extends StatelessWidget {
   const SettingsMenuScreen({super.key});
 
@@ -15,15 +37,15 @@ class SettingsMenuScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final myUid = AuthService().currentUser?.uid ?? '';
 
-    Stream<DocumentSnapshot> getProfileStream() {
+    Stream<dynamic> getProfileStream() {
       try {
         return FirebaseFirestore.instance.collection('users').doc(myUid).snapshots();
       } catch (_) {
         // Return a mock user profile document
-        return Stream.value(MockDocumentSnapshot(myUid, {
+        return Stream.value(_MockDocumentSnapshot(_MockUserProfile(myUid, {
           'name': 'Julian Vance',
           'about': 'Lumina Emerald - تواصل بوضوح وأناقة (وضع محلي)',
-        }));
+        })));
       }
     }
 
@@ -38,7 +60,7 @@ class SettingsMenuScreen extends StatelessWidget {
           onPressed: () => context.pop(),
         ),
       ),
-      body: StreamBuilder<DocumentSnapshot>(
+      body: StreamBuilder(
         stream: getProfileStream(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {

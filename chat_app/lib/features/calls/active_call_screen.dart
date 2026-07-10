@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/services/call_service.dart';
+import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/glass_container.dart';
 
@@ -9,12 +11,18 @@ class ActiveCallScreen extends StatefulWidget {
   final String callId;
   final bool isVideo;
   final String otherUid;
+  final String channelName;
+  final String token;
+  final String myUid;
 
   const ActiveCallScreen({
     super.key,
     required this.callId,
     required this.isVideo,
     required this.otherUid,
+    required this.channelName,
+    required this.token,
+    required this.myUid,
   });
 
   @override
@@ -26,6 +34,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   bool _muted = false;
   bool _remoteJoined = false;
   int? _remoteUid;
+  StreamSubscription? _eventSub;
 
   @override
   void initState() {
@@ -34,23 +43,24 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   }
 
   void _registerCallbacks() {
-    _callService.engine?.registerEventHandler(
-      RtcEngineEventHandler(
-        onUserJoined: (connection, remoteUid, elapsed) {
-          setState(() {
-            _remoteJoined = true;
-            _remoteUid = remoteUid;
-          });
-        },
-        onUserOffline: (connection, remoteUid, reason) {
-          setState(() {
-            _remoteJoined = false;
-            _remoteUid = null;
-          });
-          if (mounted) context.pop();
-        },
-      ),
-    );
+    _eventSub = _callService.events.listen((event) {
+      if (!mounted) return;
+      final type = event['type'] as String;
+      if (type == 'userJoined') {
+        setState(() {
+          _remoteJoined = true;
+          _remoteUid = event['remoteUid'] as int;
+        });
+      } else if (type == 'userLeft') {
+        setState(() {
+          _remoteJoined = false;
+          _remoteUid = null;
+        });
+        context.pop();
+      } else if (type == 'leaveChannel') {
+        context.pop();
+      }
+    });
   }
 
   Future<void> _endCall() async {
@@ -60,6 +70,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
 
   @override
   void dispose() {
+    _eventSub?.cancel();
     _callService.dispose();
     super.dispose();
   }
@@ -72,13 +83,13 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // خلفية المكالمة
+          // خلفية المكالمة - فيديو المستخدم البعيد
           if (widget.isVideo && _remoteJoined && _remoteUid != null && engine != null)
             AgoraVideoView(
               controller: VideoViewController.remote(
                 rtcEngine: engine,
                 canvas: VideoCanvas(uid: _remoteUid),
-                connection: RtcConnection(channelId: widget.callId),
+                connection: RtcConnection(channelId: widget.channelName),
               ),
             )
           else
@@ -94,7 +105,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                       color: AppColors.surfaceBright,
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withOpacity(0.2),
+                          color: AppColors.primary.withValues(alpha: 0.2),
                           blurRadius: 30,
                         ),
                       ],
@@ -128,7 +139,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                   child: AgoraVideoView(
                     controller: VideoViewController(
                       rtcEngine: engine,
-                      canvas: const VideoCanvas(uid: 0),
+                      canvas: VideoCanvas(uid: 0),
                     ),
                   ),
                 ),

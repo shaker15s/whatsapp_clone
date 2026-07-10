@@ -138,8 +138,8 @@ class _OtpScreenState extends State<OtpScreen> {
                               decoration: InputDecoration(
                                 counterText: '',
                                 hintText: '000000',
-                                hintStyle: TextStyle(color: Colors.grey.withOpacity(0.5), letterSpacing: 8),
-                                fillColor: Colors.black.withOpacity(0.2),
+                                hintStyle: TextStyle(color: Colors.grey.withValues(alpha: 0.5), letterSpacing: 8),
+                                fillColor: Colors.black.withValues(alpha: 0.2),
                                 filled: true,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),

@@ -41,7 +41,7 @@ class CommunitiesScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         'اجمع بين المجموعات ذات الاهتمام المشترك وأرسل إعلانات لجميع الأعضاء بسهولة تامة.',
-                        style: TextStyle(fontSize: 13, color: AppColors.outline.withOpacity(0.8), height: 1.4),
+                        style: TextStyle(fontSize: 13, color: AppColors.outline.withValues(alpha: 0.8), height: 1.4),
                         textAlign: TextAlign.center,
                       ),
                     ],
